@@ -11,7 +11,7 @@ def benchmark(model_name, input_length, output_length, batch_size, device):
 
     # Generate dummy input
     input_text = " ".join(["Hello"] * input_length)
-    inputs = tokenizer([input_text] * batch_size, return_tensors="pt", padding=True, truncation=True)
+    inputs = tokenizer([input_text] * batch_size, return_tensors="pt", padding=False, truncation=True)
     inputs = {key: value.to(device) for key, value in inputs.items()}
 
     # Measure time to first token
