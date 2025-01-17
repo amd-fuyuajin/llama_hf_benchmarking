@@ -31,7 +31,7 @@ def benchmark(model_name, input_length, output_length, batch_size, device):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark Llama2-70b model on CPU")
-    parser.add_argument("--model_name", type=str, default="Llama2-70b", help="Model name or path")
+    parser.add_argument("--model_name", type=str, default="meta-llama/Llama-2-7b-chat-hf", help="Model name or path")
     parser.add_argument("--input_length", type=int, default=10, help="Length of the input sequence")
     parser.add_argument("--output_length", type=int, default=20, help="Length of the output sequence")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
