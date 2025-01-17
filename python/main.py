@@ -17,7 +17,7 @@ def benchmark(model_name, input_length, output_length, batch_size, device):
     # Measure time to first token
     start_time = time.time()
     with torch.no_grad():
-        outputs = model.generate(**inputs, max_length=output_length, do_sample=False)
+        outputs = model.generate(**inputs, max_new_tokens=output_length, do_sample=True)
     time_to_first_token = time.time() - start_time
 
     # Measure throughput
