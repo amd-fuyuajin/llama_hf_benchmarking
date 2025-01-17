@@ -1,11 +1,11 @@
 import argparse
 import time
 import torch
-from transformers import LlamaTokenizer, LlamaForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 def benchmark(model_name, input_length, output_length, batch_size, device):
-    tokenizer = LlamaTokenizer.from_pretrained(model_name)
-    model = LlamaForCausalLM.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
     model.to(device)
 
     # Generate dummy input
