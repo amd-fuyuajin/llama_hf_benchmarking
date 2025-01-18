@@ -3,6 +3,7 @@ from transformers import AutoTokenizer
 from tqdm import tqdm
 import argparse
 import os
+import json
 
 def prepare_data(data_dir, model_name, output_dir, prompt_lengths, num_prompts):
     # Load the dataset
@@ -13,17 +14,19 @@ def prepare_data(data_dir, model_name, output_dir, prompt_lengths, num_prompts):
 
     filtered_prompts = {length:[] for length in prompt_lengths}
 
+    idx = 0
     for val in tqdm(dataset["train"]):
         prompt = val["text"]
-        prompt_tokens = tokenizer(prompt).input_ids
+        prompt_tokens = tokenizer(prompt, add_special_tokens=False).input_ids
         print(prompt_tokens)
         if len(prompt_tokens) < max(prompt_lengths):
             continue
         else:
             for length in prompt_lengths:
                 truncated_prompt = tokenizer.decode(prompt_tokens[:length])
-                filtered_prompts[length].append(truncated_prompt)
-            if len(filtered_prompts[prompt_lengths[0]]) >= num_prompts:
+                filtered_prompts[length].append({"id": idx, "text": truncated_prompt})
+            idx += 1
+            if idx == num_prompts:
                 break
     
     # if output_dir does not exist, create it
@@ -33,7 +36,7 @@ def prepare_data(data_dir, model_name, output_dir, prompt_lengths, num_prompts):
     for length in prompt_lengths:
         with open(f"{output_dir}/prompts_{length}.txt", "w") as f:
             for prompt in filtered_prompts[length]:
-                f.write(prompt + "\n")
+                f.write(json.dumps(prompt) + "\n")
     
 
 if __name__ == "__main__":
