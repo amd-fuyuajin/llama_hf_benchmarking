@@ -6,6 +6,15 @@ import os
 import json
 
 def prepare_data(data_dir, model_name, output_dir, prompt_lengths, num_prompts):
+    """
+    This function is used to prepare prompts for benchmarking. It takes the following arguments:
+    - data_dir: The directory containing the dataset which can be loaded using datasets.load_from_disk. 
+                for example, the wikipedia 20220301.en dataset.
+    - model_name: The model name is used to get tokenizer
+    - output_dir: The directory to save the prompts to files. 
+    - prompt_lengths: A list of integers representing the lengths of the prompts to generate.
+    - num_prompts: The number of prompts to generate for each length.
+    """
     # Load the dataset
     dataset = load_from_disk(data_dir)
     # Load the tokenizer
@@ -18,7 +27,7 @@ def prepare_data(data_dir, model_name, output_dir, prompt_lengths, num_prompts):
     for val in tqdm(dataset["train"]):
         prompt = val["text"]
         prompt_tokens = tokenizer(prompt, add_special_tokens=False).input_ids
-        print(prompt_tokens)
+        # print(prompt_tokens)
         if len(prompt_tokens) < max(prompt_lengths):
             continue
         else:
