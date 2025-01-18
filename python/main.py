@@ -6,7 +6,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 def benchmark(model_name, input_length, output_length, batch_size, device):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16)
+    model.eval()
     model.to(device)
 
     # Generate dummy input
@@ -17,15 +18,15 @@ def benchmark(model_name, input_length, output_length, batch_size, device):
     # Measure time to first token
     start_time = time.time()
     with torch.no_grad():
-        outputs = model.generate(**inputs, max_new_tokens=output_length, do_sample=True)
+        outputs = model.generate(**inputs, max_new_tokens=output_length, do_sample=False)
     time_to_first_token = time.time() - start_time
 
     # Measure throughput
     start_time = time.time()
-    with torch.no_grad():
+    with torch.no_grad(), torch.cuda.amp.autocast(dtype=torch.bfloat16):
         for _ in range(10):  # Run multiple iterations to get a stable throughput measurement
-            outputs = model.generate(**inputs, max_new_tokens=output_length, do_sample=True)
-    throughput = (batch_size * 10) / (time.time() - start_time)
+            outputs = model.generate(**inputs, max_new_tokens=output_length, do_sample=False)
+    throughput = (output_length * batch_size * 10) / (time.time() - start_time)
 
     print(f"Time to first token: {time_to_first_token:.4f} seconds")
     print(f"Throughput: {throughput:.2f} samples/second")
