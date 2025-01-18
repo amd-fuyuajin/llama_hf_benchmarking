@@ -16,7 +16,8 @@ def prepare_data(data_dir, model_name, output_dir, prompt_lengths, num_prompts):
     for val in tqdm(dataset["train"]):
         prompt = val["text"]
         prompt_tokens = tokenizer(prompt).input_ids
-        if len(prompt_tokens < max(prompt_lengths)):
+        print(prompt_tokens)
+        if len(prompt_tokens) < max(prompt_lengths):
             continue
         else:
             for length in prompt_lengths:
