@@ -23,6 +23,7 @@ def parse_cmd():
     parser.add_argument("--cores_per_instance", type=int, default=os.cpu_count(), help="Number of cores per instance")
     parser.add_argument("--total_batches", type=int, default=10, help="Total number of batches to run")
     parser.add_argument("--output_dir", type=str, default="output", help="Output directory")
+    parser.add_argument("--compile_backend", type=str, help="Backend to compile the model (e.g. ipex, zentorch)")
     # todo: add do_sample argument
     # todo: add temperature argument
     # todo: add top_k argument
@@ -122,6 +123,15 @@ def load_model(args):
     # load the model
     model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
     model.eval().to(args.device)
+    compile_backend = args.compile_backend
+    if compile_backend == "zentorch":
+        import zentorch
+        model = zentorch.llm.optimize(model, dtype=torch.bfloat16)
+        model = torch.compile(model, backend="zentorch")
+    elif compile_backend == "ipex":
+        import intel_extension_for_pytorch as ipex
+        model = ipex.llm.optimize(model, dtype=torch.bfloat16)
+
     return model, tokenizer
 
 # create the main function to run the benchmark. it takes the args as argument
@@ -165,7 +175,9 @@ def main(args):
 
     # get the outputs from the output queue
     # create a file to write the output sequences
-    output_file = os.path.join(args.output_dir, "output_seq.txt")
+    input_length = args.input_length
+    output_legth = args.output_length
+    output_file = os.path.join(args.output_dir, f"output_seq_BS{batch_ids}_IN{input_length}_OUT{output_legth}.txt")
     f_out = open(output_file, "w")
 
     # create a dictionary to collect the performance metrics
@@ -213,42 +225,23 @@ def main(args):
     print(perf_df.describe())
 
     # write the arguments and performance metrics to a file
-    performance_file = os.path.join(args.output_dir, "performance_metrics.txt")
+    performance_file = os.path.join(args.output_dir, f"performance_metrics_BS{batch_ids}_IN{input_length}_OUT{output_legth}.txt")
     with open(performance_file, "w") as f:
         f.write(json.dumps(vars(args)) + "\n")
         f.write(perf_df.describe().to_json() + "\n")
+        f.write(json.dumps({
+            "total_runtime": total_runtime,
+            "throughput_soc": throughput_soc,
+            "request_per_second": request_per_second
+            }) + "\n")
 
-
-
-# this function is not used
-def benchmark(model_name, input_length, output_length, batch_size, device):
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16)
-    model.eval()
-    model.to(device)
-    
-    # Generate dummy input
-    input_text = " ".join(["Hello"] * input_length)
-    inputs = tokenizer([input_text] * batch_size, return_tensors="pt", padding=False, truncation=True)
-    inputs = {key: value.to(device) for key, value in inputs.items()}
-
-    # Measure time to first token
-    start_time = time.time()
-    with torch.no_grad():
-        outputs = model.generate(**inputs, max_new_tokens=output_length, do_sample=False)
-    time_to_first_token = time.time() - start_time
-
-    # Measure throughput
-    start_time = time.time()
-    with torch.no_grad(), torch.cuda.amp.autocast(dtype=torch.bfloat16):
-        for _ in range(10):  # Run multiple iterations to get a stable throughput measurement
-            outputs = model.generate(**inputs, max_new_tokens=output_length, do_sample=False)
-    throughput = (output_length * batch_size * 10) / (time.time() - start_time)
-
-    print(f"Time to first token: {time_to_first_token:.4f} seconds")
-    print(f"Throughput: {throughput:.2f} samples/second")
 
 if __name__ == "__main__":
     args = parse_cmd()
+    test_output_length = args.output_length
+    # set output_lenght to 1 to measure the TTFT
+    args.output_length = 1
+    main(args)
+    # set output_lenght to the original value to measure the throughput
+    args.output_length = test_output_length
     main(args)
