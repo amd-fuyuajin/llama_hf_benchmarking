@@ -76,7 +76,7 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
     while True:
         # get the prompt from the input queue
         prompt_ids = input_queue.get()
-        print(f"get prompt ids: {prompt_ids}")
+        # print(f"get prompt ids: {prompt_ids}")
         if prompt_ids is None:
             output_queue.put(None)
             input_queue.task_done()
@@ -84,7 +84,7 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
             break
         # get the prompt from the prompts_dict
         prompt_batch = [prompts_dict[prompt_id] for prompt_id in prompt_ids]
-        print(f"prompt_batch: {prompt_batch}")
+        # print(f"prompt_batch: {prompt_batch}")
         t0 = time()        
         # encode the prompt
         inputs = tokenizer(prompt_batch, return_tensors="pt", padding=False, truncation=True)
@@ -113,7 +113,7 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
             "latency": t3-t0,
             "throughput_instance": batch_size * output_length/(t3-t0)})
         input_queue.task_done()
-        print(f"Time to encode: {t1-t0:.4f} seconds, Time to generate: {t2-t1:.4f} seconds")
+        # print(f"Time to encode: {t1-t0:.4f} seconds, Time to generate: {t2-t1:.4f} seconds")
 
 # create a function to load the model and tokenizer
 def load_model(args):
@@ -177,7 +177,7 @@ def main(args):
     # create a file to write the output sequences
     input_length = args.input_length
     output_legth = args.output_length
-    output_file = os.path.join(args.output_dir, f"output_seq_BS{batch_ids}_IN{input_length}_OUT{output_legth}.txt")
+    output_file = os.path.join(args.output_dir, f"output_seq_BS{batch_size}_IN{input_length}_OUT{output_legth}.txt")
     f_out = open(output_file, "w")
 
     # create a dictionary to collect the performance metrics
@@ -225,7 +225,7 @@ def main(args):
     print(perf_df.describe())
 
     # write the arguments and performance metrics to a file
-    performance_file = os.path.join(args.output_dir, f"performance_metrics_BS{batch_ids}_IN{input_length}_OUT{output_legth}.txt")
+    performance_file = os.path.join(args.output_dir, f"performance_metrics_BS{batch_size}_IN{input_length}_OUT{output_legth}.txt")
     with open(performance_file, "w") as f:
         f.write(json.dumps(vars(args)) + "\n")
         f.write(perf_df.describe().to_json() + "\n")
