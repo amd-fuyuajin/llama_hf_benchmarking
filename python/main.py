@@ -1,4 +1,5 @@
 import argparse
+from collections import defaultdict
 import time
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -8,6 +9,7 @@ import json
 import torch.multiprocessing as mp
 from torch.multiprocessing import Process, Queue, JoinableQueue
 from time import time
+import pandas as pd
 
 def parse_cmd():
     parser = argparse.ArgumentParser(description="Benchmark Llama2-70b model on CPU")
@@ -20,6 +22,7 @@ def parse_cmd():
     parser.add_argument("--num_instances", type=int, default=1, help="Number of instances to run")
     parser.add_argument("--cores_per_instance", type=int, default=os.cpu_count(), help="Number of cores per instance")
     parser.add_argument("--total_batches", type=int, default=10, help="Total number of batches to run")
+    parser.add_argument("--output_dir", type=str, default="output", help="Output directory")
     # todo: add do_sample argument
     # todo: add temperature argument
     # todo: add top_k argument
@@ -60,6 +63,7 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
     prompts_dict = {}
     input_length = args.input_length
     output_length = args.output_length
+    batch_size = args.batch_size
     input_dir = os.getenv("INPUT_DIR")
     input_file = os.path.join(input_dir, f"prompts_{input_length}.txt")
     with open(input_file, "r") as f:
@@ -78,9 +82,9 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
             print(f"stopping process {pid}")
             break
         # get the prompt from the prompts_dict
-        t0 = time()
         prompt_batch = [prompts_dict[prompt_id] for prompt_id in prompt_ids]
         print(f"prompt_batch: {prompt_batch}")
+        t0 = time()        
         # encode the prompt
         inputs = tokenizer(prompt_batch, return_tensors="pt", padding=False, truncation=True)
         inputs = {key: value.to(args.device) for key, value in inputs.items()}
@@ -88,12 +92,25 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
         # generate the output
         t1 = time()
         with torch.no_grad():
-            outputs_tokens = model.generate(**inputs, min_new_tokens=output_length, max_new_tokens=output_length, do_sample=False)
+            outputs_tokens = model.generate(
+                **inputs, 
+                min_new_tokens=output_length, 
+                max_new_tokens=output_length, 
+                use_cache=True,
+                do_sample=False)
         t2 = time()
         # put the output in the output queue
-        outputs = tokenizer.batch_decode(outputs_tokens)
-        print(f"PID={pid}, outputs: {outputs}")
-        output_queue.put((prompt_ids, outputs))
+        outputs = tokenizer.batch_decode(outputs_tokens, skip_special_tokens=True)
+        t3 = time()
+        # print(f"PID={pid}, outputs: {outputs}")
+        output_queue.put({
+            "prompt_ids": prompt_ids, 
+            "outputs": outputs, 
+            "time_to_encode": t1-t0,
+            "time_to_generate": t2-t1,
+            "time_to_decode": t3-t2,
+            "latency": t3-t0,
+            "throughput_instance": batch_size * output_length/(t3-t0)})
         input_queue.task_done()
         print(f"Time to encode: {t1-t0:.4f} seconds, Time to generate: {t2-t1:.4f} seconds")
 
@@ -129,15 +146,17 @@ def main(args):
         p = Process(target=generate_output, args=(model, tokenizer, input_queue, output_queue, cpu_ids, args))
         p.start()
         processes.append(p)
-    
-    # send the prompt ids to the input queue
-    start = time()
-    print("start sending input")
+
     batch_size = args.batch_size
     total_prompts = args.batch_size * args.total_batches
     print(f"total_prompts: {total_prompts}")
+
+    start = time()
+    print("start sending input")
+    # send the prompt ids to the input queue
     for batch_ids in range(0, total_prompts, batch_size):
-        prompt_ids = list(range(batch_ids, batch_ids+batch_size))
+        end_idex = min(batch_ids+batch_size, total_prompts)
+        prompt_ids = list(range(batch_ids, end_idex))
         input_queue.put(prompt_ids)
     
     # send None to the input queue to signal the end of the prompts
@@ -145,10 +164,17 @@ def main(args):
         input_queue.put(None)
 
     # get the outputs from the output queue
+    # create a file to write the output sequences
+    output_file = os.path.join(args.output_dir, "output_seq.txt")
+    f_out = open(output_file, "w")
+
+    # create a dictionary to collect the performance metrics
+    performance_metrics = defaultdict(list)
+
     count = 0
     while True:
         outputs = output_queue.get()
-        print(outputs)
+        # print(outputs)
         if outputs is None:
             count += 1
             output_queue.task_done()
@@ -157,6 +183,16 @@ def main(args):
         else:
             # prompt_ids, outputs = outputs
             # print(f"Prompt ids: {prompt_ids}, Outputs: {outputs}")
+            for i in range(len(outputs["prompt_ids"])):
+                f_out.write(json.dumps({
+                    "prompt_id": outputs["prompt_ids"][i],
+                    "output": outputs["outputs"][i],
+                }) + "\n")
+            performance_metrics["time_to_encode"].append(outputs["time_to_encode"])
+            performance_metrics["time_to_generate"].append(outputs["time_to_generate"])
+            performance_metrics["time_to_decode"].append(outputs["time_to_decode"])
+            performance_metrics["latency"].append(outputs["latency"])
+            performance_metrics["throughput_instance"].append(outputs["throughput_instance"])
             output_queue.task_done()
     
     # wait for the processes to finish
@@ -166,8 +202,21 @@ def main(args):
         p.join()
 
     end = time()
+    total_runtime = end - start
+    throughput_soc = total_prompts * args.output_length / total_runtime
+    request_per_second = total_prompts / total_runtime
     print(f"Total time taken: {end-start:.4f} seconds")
-    print(f"throughput: {total_prompts/(end-start):.2f} samples/second, {total_prompts * args.output_length/(end-start):.2f} tokens/sec")
+    print(f"SoC throughput: {request_per_second:.2f} samples/second, {throughput_soc:.2f} tokens/sec")
+    f_out.close()
+
+    perf_df = pd.DataFrame(performance_metrics)
+    print(perf_df.describe())
+
+    # write the arguments and performance metrics to a file
+    performance_file = os.path.join(args.output_dir, "performance_metrics.txt")
+    with open(performance_file, "w") as f:
+        f.write(json.dumps(vars(args)) + "\n")
+        f.write(perf_df.describe().to_json() + "\n")
 
 
 
