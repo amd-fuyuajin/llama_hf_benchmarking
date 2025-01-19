@@ -12,11 +12,11 @@ from time import time
 def parse_cmd():
     parser = argparse.ArgumentParser(description="Benchmark Llama2-70b model on CPU")
     parser.add_argument("--model_name", type=str, default="meta-llama/Llama-2-7b-chat-hf", help="Model name or path")
-    parser.add_argument("--input_length", type=int, default=10, help="Length of the input sequence")
-    parser.add_argument("--output_length", type=int, default=20, help="Length of the output sequence")
+    parser.add_argument("--input_length", type=int, default=64, help="Length of the input sequence")
+    parser.add_argument("--output_length", type=int, default=128, help="Length of the output sequence")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
     parser.add_argument("--device", type=str, default="cpu", help="Device to run the model on (cpu or cuda)")
-    parser.add_argument("--cpu_id_list", type=str, default=f"0-{os.cpu_count()-1}" help="bind the job to specific cpu ids")
+    parser.add_argument("--cpu_id_list", type=str, default=f"0-{os.cpu_count()-1}", help="bind the job to specific cpu ids")
     parser.add_argument("--num_instances", type=int, default=1, help="Number of instances to run")
     parser.add_argument("--cores_per_instance", type=int, default=os.cpu_count(), help="Number of cores per instance")
     parser.add_argument("--total_batches", type=int, default=10, help="Total number of batches to run")
@@ -54,7 +54,7 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
     pid = os.getpid()
     os.sched_setaffinity(pid, cpu_ids)
     torch.set_num_threads(len(cpu_ids))
-    
+    print(f"starting process {pid}")
     # load all the prompts into memory.
     # get the input_lenght from the args
     prompts_dict = {}
@@ -67,25 +67,32 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
         for line in lines:
             prompt = json.loads(line)
             prompts_dict[prompt["id"]] = prompt["text"]
+    print(f"data loaded in processed {pid}")
     while True:
         # get the prompt from the input queue
         prompt_ids = input_queue.get()
+        print(f"get prompt ids: {prompt_ids}")
         if prompt_ids is None:
-            input_queue.task_done()
             output_queue.put(None)
+            input_queue.task_done()
+            print(f"stopping process {pid}")
             break
         # get the prompt from the prompts_dict
         t0 = time()
         prompt_batch = [prompts_dict[prompt_id] for prompt_id in prompt_ids]
+        print(f"prompt_batch: {prompt_batch}")
         # encode the prompt
         inputs = tokenizer(prompt_batch, return_tensors="pt", padding=False, truncation=True)
         inputs = {key: value.to(args.device) for key, value in inputs.items()}
+        # print(f"inputs: {inputs}")
         # generate the output
         t1 = time()
         with torch.no_grad():
-            outputs = model.generate(**inputs, max_new_tokens=output_length, do_sample=False)
+            outputs_tokens = model.generate(**inputs, min_new_tokens=output_length, max_new_tokens=output_length, do_sample=False)
         t2 = time()
         # put the output in the output queue
+        outputs = tokenizer.batch_decode(outputs_tokens)
+        print(f"PID={pid}, outputs: {outputs}")
         output_queue.put((prompt_ids, outputs))
         input_queue.task_done()
         print(f"Time to encode: {t1-t0:.4f} seconds, Time to generate: {t2-t1:.4f} seconds")
@@ -104,14 +111,17 @@ def load_model(args):
 # this function will load the model and tokenizer. It will start multiple processes to run the inference
 # each process will read the prompts from a input queue and write the outputs to a output queue
 def main(args):
+    torch.set_num_threads(1)
     # load the model and tokenizer
     model, tokenizer = load_model(args)
     #share the model and tokenizer with the child processes
     model.share_memory()
-    tokenizer.share_memory()
+    print(model)
+    print(tokenizer)
+    # tokenizer.share_memory()
     # create input and output queues
     input_queue = JoinableQueue()
-    output_queue = Queue()
+    output_queue = JoinableQueue()
     # create the processes
     processes = []
     for i in range(args.num_instances):
@@ -122,8 +132,10 @@ def main(args):
     
     # send the prompt ids to the input queue
     start = time()
+    print("start sending input")
     batch_size = args.batch_size
     total_prompts = args.batch_size * args.total_batches
+    print(f"total_prompts: {total_prompts}")
     for batch_ids in range(0, total_prompts, batch_size):
         prompt_ids = list(range(batch_ids, batch_ids+batch_size))
         input_queue.put(prompt_ids)
@@ -132,22 +144,30 @@ def main(args):
     for _ in range(args.num_instances):
         input_queue.put(None)
 
-    # wait for the processes to finish
-    input_queue.join()
-
     # get the outputs from the output queue
+    count = 0
     while True:
         outputs = output_queue.get()
+        print(outputs)
         if outputs is None:
             count += 1
+            output_queue.task_done()
             if count == args.num_instances:
                 break
-        prompt_ids, outputs = output_queue.get()
-        print(f"Prompt ids: {prompt_ids}, Outputs: {outputs}")
+        else:
+            # prompt_ids, outputs = outputs
+            # print(f"Prompt ids: {prompt_ids}, Outputs: {outputs}")
+            output_queue.task_done()
     
+    # wait for the processes to finish
+    input_queue.join()
+    output_queue.join()
+    for p in processes:
+        p.join()
+
     end = time()
     print(f"Total time taken: {end-start:.4f} seconds")
-    print(f"throughput: {total_prompts/(end-start):.2f} samples/second")
+    print(f"throughput: {total_prompts/(end-start):.2f} samples/second, {total_prompts * args.output_length/(end-start):.2f} tokens/sec")
 
 
 
@@ -158,7 +178,7 @@ def benchmark(model_name, input_length, output_length, batch_size, device):
     model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16)
     model.eval()
     model.to(device)
-
+    
     # Generate dummy input
     input_text = " ".join(["Hello"] * input_length)
     inputs = tokenizer([input_text] * batch_size, return_tensors="pt", padding=False, truncation=True)
