@@ -15,6 +15,9 @@ device="cpu"
 cpu_id_list="0-$((cpu_count-1))"
 uprof=false
 batch_size=1
+model_name="meta-llama/Llama-3.1-8B-Instruct"
+input_length=128
+output_length=128
 
 # parse arguments
 while [[ "$#" -gt 0 ]]; do
@@ -82,14 +85,14 @@ if $uprof; then
         --input_length "$input_length" --output_length "$output_length" \
         --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" \
         --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" \
-        --total_batches "$total_batches" --output_dir "$output_dir" \
+        --total_batches "$total_batches" --output_dir "$OUTPUT_DIR" \
 
 else
     $PYTHON -u "${MAIN_DIR}/python/main.py" main.py --model_name "$model_name" \
         --input_length "$input_length" --output_length "$output_length" \
         --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" \
         --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" \
-        --total_batches "$total_batches" --output_dir "$output_dir" \
+        --total_batches "$total_batches" --output_dir "$OUTPUT_DIR" \
         
 fi
 
