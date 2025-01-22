@@ -22,7 +22,7 @@ def extract_runtime_info(results_root_dir):
         entry["output_len"] = int(output_len.group(1)) if output_len else None
 
         # replace the OUT1.txt with f"OUT{output_len}.txt" in the file path
-        result_file = re.replace(r"OUT1.txt", f"OUT{entry['output_len']}.txt", file_path.name)
+        result_file = re.sub(r"OUT1.txt", f"OUT{entry['output_len']}.txt", file_path.name)
         result_file_path = file_path.parent / result_file
         # extract throughput and other information from result_file_path
         with open(result_file_path, 'r') as file:
