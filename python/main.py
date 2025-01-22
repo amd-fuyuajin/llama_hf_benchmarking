@@ -143,9 +143,8 @@ def main(args):
     model, tokenizer = load_model(args)
     #share the model and tokenizer with the child processes
     model.share_memory()
-    print(model)
-    print(tokenizer)
-    # tokenizer.share_memory()
+    # print(model)
+    # print(tokenizer)
     # create input and output queues
     input_queue = JoinableQueue()
     output_queue = JoinableQueue()
