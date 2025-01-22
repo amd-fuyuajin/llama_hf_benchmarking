@@ -87,7 +87,7 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
         # print(f"prompt_batch: {prompt_batch}")
         t0 = time()        
         # encode the prompt
-        inputs = tokenizer(prompt_batch, return_tensors="pt", padding=False, truncation=True)
+        inputs = tokenizer(prompt_batch, return_tensors="pt", padding=True, truncation=True)
         inputs = {key: value.to(args.device) for key, value in inputs.items()}
         # print(f"inputs: {inputs}")
         # generate the output

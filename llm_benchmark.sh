@@ -58,7 +58,7 @@ echo "Compile Backend: $compile_backend"
 # python main.py --model_name "$model_name" --input_length "$input_length" --output_length "$output_length" --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" --total_batches "$total_batches" --output_dir "$output_dir" --compile_backend "$compile_backend"
 
 PYTHON="${CONDA_PREFIX}/bin/python"
-if (( $profiling == 1 )); then
+if $uprof; then
     if [ ! -f "/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDuProfPcm" ]; then
         echo "uProf 5.0 is not installed. Please install uProf first."
         exit 1
@@ -81,14 +81,14 @@ fi
 
 if $uprof; then
     $UPROFPCM -o "${OUTPUT_DIR}/${folder_name}.csv" -- \
-        $PYTHON -u "${MAIN_DIR}/python/main.py" main.py --model_name "$model_name" \
+        $PYTHON -u "${MAIN_DIR}/python/main.py" --model_name "$model_name" \
         --input_length "$input_length" --output_length "$output_length" \
         --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" \
         --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" \
         --total_batches "$total_batches" --output_dir "$OUTPUT_DIR" \
 
 else
-    $PYTHON -u "${MAIN_DIR}/python/main.py" main.py --model_name "$model_name" \
+    $PYTHON -u "${MAIN_DIR}/python/main.py" --model_name "$model_name" \
         --input_length "$input_length" --output_length "$output_length" \
         --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" \
         --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" \
