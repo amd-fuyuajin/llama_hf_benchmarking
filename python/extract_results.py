@@ -18,19 +18,22 @@ def extract_runtime_info(results_root_dir):
         entry["platform"] = file_path.parent.parent.parent.name
         entry["test_type"] = file_path.parent.parent.name
         entry["test_name"] = file_path.parent.name
-        output_len = re.search(r"OUT(\d+)", entry["test_name"])
-        entry["output_len"] = int(output_len.group(1)) if output_len else None
+        output_length = re.search(r"OUT(\d+)", entry["test_name"])
+        if output_length is None:
+            continue
+        else:
+            entry["output_length"] = int(output_length.group(1))
 
         # replace the OUT1.txt with f"OUT{output_len}.txt" in the file path
-        result_file = re.sub(r"OUT1.txt", f"OUT{entry['output_len']}.txt", file_path.name)
+        result_file = re.sub(r"OUT1.txt", f"OUT{entry['output_length']}.txt", file_path.name)
         result_file_path = file_path.parent / result_file
         # extract throughput and other information from result_file_path
         with open(result_file_path, 'r') as file:
             lines = file.readlines()
         arguments = json.loads(lines[0])
         entry["model_name"] = arguments["model_name"]
-        entry["input_len"] = arguments["input_len"]
-        entry["output_len"] = arguments["output_len"]
+        entry["input_length"] = arguments["input_length"]
+        assert entry["output_length"] == arguments["output_length"]
         entry["batch_size"] = arguments["batch_size"]
         entry["device"] = arguments["device"]
         entry["num_instances"] = arguments["num_instances"]
