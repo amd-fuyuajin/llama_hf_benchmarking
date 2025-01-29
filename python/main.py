@@ -128,10 +128,26 @@ def load_model(args):
         import zentorch
         model = zentorch.llm.optimize(model, dtype=torch.bfloat16)
         model = torch.compile(model, backend="zentorch")
+        print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "ipex":
         import intel_extension_for_pytorch as ipex
-        model = ipex.llm.optimize(model, dtype=torch.bfloat16)
-
+        model = ipex.optimize(model, dtype=torch.bfloat16)
+        model = torch.compile(model, backend="ipex")
+        print(f"compiled with backend: {compile_backend}")
+    elif compile_backend == "torchinductor":
+        model = torch.compile(model)
+        print(f"compiled with backend: {compile_backend}")
+    elif compile_backend == "ipex_llm":
+        import ipex_llm.transformers as ipex_transformers
+        model = ipex_transformers.AutoModelForCausalLM.from_pretrained(model_path,
+                                                 #load_in_4bit=True,
+                                                 torch_dtype=torch.bfloat16,
+                                                 optimize_model=True,
+                                                 trust_remote_code=True,
+                                                 use_cache=True)
+        print(f"compiled with backend: {compile_backend}")
+        model.eval().to(args.device)
+    
     return model, tokenizer
 
 # create the main function to run the benchmark. it takes the args as argument

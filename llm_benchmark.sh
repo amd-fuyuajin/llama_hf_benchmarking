@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-set -x
+# set -x
 
 CPU_MODEL="$(lscpu | grep "Model name" | awk -F 'name: ' '{print $2}' | awk '{$1=$1}1' | tr -d ':' | tr ' ' '_')"
 echo $CPU_MODEL
@@ -35,7 +35,7 @@ while [[ "$#" -gt 0 ]]; do
         --total_batches) total_batches="$2"; shift ;;
         --output_dir) output_dir="$2"; shift ;;
         --compile_backend) compile_backend="$2"; shift ;;
-        --uprof) uprof=true; shift ;;
+        --uprof) uprof=true;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -86,6 +86,7 @@ if $uprof; then
         --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" \
         --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" \
         --total_batches "$total_batches" --output_dir "$OUTPUT_DIR" \
+        --compile_backend "$compile_backend"
 
 else
     $PYTHON -u "${MAIN_DIR}/python/main.py" --model_name "$model_name" \
@@ -93,7 +94,8 @@ else
         --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" \
         --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" \
         --total_batches "$total_batches" --output_dir "$OUTPUT_DIR" \
-        
+        --compile_backend "$compile_backend"
+
 fi
 
 
