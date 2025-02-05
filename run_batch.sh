@@ -98,13 +98,16 @@ source env_setup.sh
 
 
 cpu_count=$(nproc)
-test_name="torchinductor_compiled"
-compile_backend="torchinductor"
+test_name="zentorch_collect_uprof"
+compile_backend="zentorch"
 
-for num_instances in 1; do
+for num_instances in 1 4; do
     cores_per_instance=$((cpu_count/num_instances))
     total_batches=$((num_instances*2))
     for batch_size in 1 2 4 8 16 32 64 128 256; do
+	if (( num_instances == 4 )) && (( batch_size >= 128 )); then
+            continue
+	fi
         for input_length in 128 1024; do
             for output_length in 128 1024; do
                 folder_name="P${num_instances}_BS${batch_size}_IN${input_length}_OUT${output_length}"
@@ -112,7 +115,7 @@ for num_instances in 1; do
                 --input_length $input_length --output_length $output_length \
                 --num_instances $num_instances --cores_per_instance $cores_per_instance \
                 --total_batches $total_batches --compile_backend $compile_backend \
-		# --uprof
+		--uprof
 
             done
         done
