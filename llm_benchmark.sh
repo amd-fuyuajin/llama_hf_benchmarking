@@ -67,7 +67,7 @@ if $uprof; then
         su -c 'echo 0 > /proc/sys/kernel/nmi_watchdog; echo -1 > /proc/sys/kernel/perf_event_paranoid; modprobe amd_uncore'
         UPROFPCM="/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDuProfPcm -m ipc,fp,l1,l2,l3,dc,memory,dma,xgmi,pcie,pipeline_util -a -s -X --html"
         # UPROF="/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDPerf/AMDuProfSys --config core,l3,df,umc -a"
-        # POWER_PROF="/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDuProfCLI timechart -e power -a"
+        POWER_PROF="/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDuProfCLI timechart -e power -a"
     fi
 fi
 
@@ -80,6 +80,7 @@ fi
 ./platform_info.sh $OUTPUT_DIR
 
 if $uprof; then
+    $POWER_PROF -o "$RESULTS_DIR" \
     $UPROFPCM -o "${OUTPUT_DIR}/${folder_name}.csv" -- \
         $PYTHON -u "${MAIN_DIR}/python/main.py" --model_name "$model_name" \
         --input_length "$input_length" --output_length "$output_length" \

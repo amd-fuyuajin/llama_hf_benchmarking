@@ -7,9 +7,10 @@ import os
 import sys
 import json
 import torch.multiprocessing as mp
-from torch.multiprocessing import Process, Queue, JoinableQueue
-from time import time
+from torch.multiprocessing import Process, Queue, JoinableQueue, Value, Lock
+from time import time, sleep
 import pandas as pd
+import numpy as np
 
 def parse_cmd():
     parser = argparse.ArgumentParser(description="Benchmark Llama2-70b model on CPU")
@@ -24,6 +25,8 @@ def parse_cmd():
     parser.add_argument("--total_batches", type=int, default=10, help="Total number of batches to run")
     parser.add_argument("--output_dir", type=str, default="output", help="Output directory")
     parser.add_argument("--compile_backend", type=str, help="Backend to compile the model (e.g. ipex, zentorch)")
+    # add an argument to specify whether to return the generated text
+    parser.add_argument("--return_text", action="store_true", help="Return the generated text")
     # todo: add do_sample argument
     # todo: add temperature argument
     # todo: add top_k argument
@@ -53,7 +56,7 @@ def parse_cmd():
 
 # create a function to generate the output. This function will be called by multiprocessing.Process
 # this function will read the prompts from a input queue and write the outputs to an output queue
-def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
+def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args, lock, instance_ready_counter):
     # get pid of the process
     pid = os.getpid()
     os.sched_setaffinity(pid, cpu_ids)
@@ -73,6 +76,12 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
             prompt = json.loads(line)
             prompts_dict[prompt["id"]] = prompt["text"]
     print(f"data loaded in processed {pid}")
+
+    # increment the instance_ready_counter
+    lock.acquire()
+    instance_ready_counter.value += 1
+    lock.release()
+
     while True:
         # get the prompt from the input queue
         prompt_ids = input_queue.get()
@@ -104,6 +113,11 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args):
         outputs = tokenizer.batch_decode(outputs_tokens, skip_special_tokens=True)
         t3 = time()
         # print(f"PID={pid}, outputs: {outputs}")
+        # if the args.return_text is not set, then do not return the generated text
+        # set outputs to a list of empty strings
+        if not args.return_text:
+            outputs = [""] * len(outputs)
+
         output_queue.put({
             "prompt_ids": prompt_ids, 
             "outputs": outputs, 
@@ -164,6 +178,11 @@ def main(args):
     # create input and output queues
     input_queue = JoinableQueue()
     output_queue = JoinableQueue()
+
+    # create a lock to synchronize the instance_ready_counter
+    lock = Lock()
+    instance_ready_counter = Value("i", 0)
+
     # create the processes
     processes = []
     for i in range(args.num_instances):
@@ -175,6 +194,10 @@ def main(args):
     batch_size = args.batch_size
     total_prompts = args.batch_size * args.total_batches
     print(f"total_prompts: {total_prompts}")
+
+    while instance_ready_counter.value < args.num_instances:
+        print(f"waiting for all instances to be ready.")
+        sleep(2)
 
     start = time()
     print("start sending input")

@@ -46,10 +46,14 @@ def extract_runtime_info(results_root_dir):
         entry["time_to_generate"] = runtimes["time_to_generate"]["mean"]
         entry["time_to_decode"] = runtimes["time_to_decode"]["mean"]
         entry["latency"] = runtimes["latency"]["mean"]
+        # the instance throughput was calculated using the total latency including runtime
+        # for encoding, generation and decoding
+        # the throughput for the generation stage is calcuated below
+        entry["throughput_instance"] = runtimes["throughput_instance"]["mean"]
 
         perf_metrics = json.loads(lines[2])
         entry["throughput_soc"] = perf_metrics["throughput_soc"]
-        entry["samples_per_second"] = perf_metrics["request_per_second"]
+        entry["request_per_second"] = perf_metrics["request_per_second"]
 
         # read the file_path to get TTFT data
         with open(file_path, 'r') as file:
@@ -57,6 +61,21 @@ def extract_runtime_info(results_root_dir):
         
         runtimes = json.loads(lines[1])
         entry["TTFT"] = runtimes["latency"]["mean"]
+
+        # calculate more metrics
+        # calculate the throughput for the generation stage
+        # for each instance, it is calculated as number of tokens generated divided by 
+        # time to the end of gneration subtracted by TTFT
+        entry["throughput_instance_generation"] = \
+            entry["batch_size"] * (entry["output_length"] -1) / (entry["time_to_encode"] + entry["time_to_generate"] - entry["TTFT"])
+
+        # calcuated the SoC throughput for the generation stage
+        # it is calculated as instance throughput for generation stage multiplied by number of instances
+        entry["throughput_soc_generation"] = entry["throughput_instance_generation"] * entry["num_instances"]
+        
+        # calculate time per output token (TPOT) for the generation stage
+        # use miniseconds as the unit
+        entry["TPOT"] = 1000 / entry["throughput_instance_generation"]
 
         results.append(entry)
 
