@@ -64,8 +64,8 @@ if $uprof; then
         exit 1
     else
         # prerequisite for uProf to work
-        su -c 'echo 0 > /proc/sys/kernel/nmi_watchdog; echo -1 > /proc/sys/kernel/perf_event_paranoid; modprobe amd_uncore'
-        UPROFPCM="/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDuProfPcm -m ipc,fp,l1,l2,l3,dc,memory,dma,xgmi,pcie,pipeline_util -a -s -X --html"
+        su -c 'echo 0 > /proc/sys/kernel/nmi_watchdog; echo -1 > /proc/sys/kernel/perf_event_paranoid; modprobe msr'
+        UPROFPCM="/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDuProfPcm -m ipc,fp,l1,l2,l3,dc,memory,dma,xgmi,pcie,pipeline_util -a -s --msr --html"
         # UPROF="/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDPerf/AMDuProfSys --config core,l3,df,umc -a"
         POWER_PROF="/opt/AMDuProf_Internal_Linux_x64_5.0.845/bin/AMDuProfCLI timechart -e power -a"
     fi

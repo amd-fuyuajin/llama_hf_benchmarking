@@ -98,10 +98,10 @@ source env_setup.sh
 
 
 cpu_count=$(nproc)
-test_name="zentorch_collect_uprof"
+test_name="zentorch_test_new_script"
 compile_backend="zentorch"
 
-for num_instances in 1 4; do
+for num_instances in 12; do
     cores_per_instance=$((cpu_count/num_instances))
     total_batches=$((num_instances*2))
     for batch_size in 1 2 4 8 16 32 64 128 256; do
