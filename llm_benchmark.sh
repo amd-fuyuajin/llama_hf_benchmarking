@@ -18,6 +18,7 @@ batch_size=1
 model_name="meta-llama/Llama-3.1-8B-Instruct"
 input_length=128
 output_length=128
+model_copies=1
 
 # parse arguments
 while [[ "$#" -gt 0 ]]; do
@@ -35,6 +36,7 @@ while [[ "$#" -gt 0 ]]; do
         --total_batches) total_batches="$2"; shift ;;
         --output_dir) output_dir="$2"; shift ;;
         --compile_backend) compile_backend="$2"; shift ;;
+        --model_copies) model_copies="$2"; shift ;;
         --uprof) uprof=true;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -53,6 +55,7 @@ echo "Cores per Instance: $cores_per_instance"
 echo "Total Batches: $total_batches"
 echo "Output Directory: $output_dir"
 echo "Compile Backend: $compile_backend"
+echo "Model Copies: $model_copies"
 
 # Add your command to run the Python script here, for example:
 # python main.py --model_name "$model_name" --input_length "$input_length" --output_length "$output_length" --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" --total_batches "$total_batches" --output_dir "$output_dir" --compile_backend "$compile_backend"
@@ -87,7 +90,7 @@ if $uprof; then
         --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" \
         --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" \
         --total_batches "$total_batches" --output_dir "$OUTPUT_DIR" \
-        --compile_backend "$compile_backend"
+        --compile_backend "$compile_backend" --model_copies "$model_copies"
 
 else
     $PYTHON -u "${MAIN_DIR}/python/main.py" --model_name "$model_name" \
@@ -95,7 +98,7 @@ else
         --batch_size "$batch_size" --device "$device" --cpu_id_list "$cpu_id_list" \
         --num_instances "$num_instances" --cores_per_instance "$cores_per_instance" \
         --total_batches "$total_batches" --output_dir "$OUTPUT_DIR" \
-        --compile_backend "$compile_backend"
+        --compile_backend "$compile_backend" --model_copies "$model_copies"
 
 fi
 

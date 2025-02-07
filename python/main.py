@@ -27,6 +27,8 @@ def parse_cmd():
     parser.add_argument("--compile_backend", type=str, help="Backend to compile the model (e.g. ipex, zentorch)")
     # add an argument to specify whether to return the generated text
     parser.add_argument("--return_text", action="store_true", help="Return the generated text")
+    # add an argument to specify the number of model copies, default is 1
+    parser.add_argument("--model_copies", type=int, default=1, help="Number of model copies")
     # todo: add do_sample argument
     # todo: add temperature argument
     # todo: add top_k argument
@@ -169,12 +171,23 @@ def load_model(args):
 # each process will read the prompts from a input queue and write the outputs to a output queue
 def main(args):
     torch.set_num_threads(1)
-    # load the model and tokenizer
-    model, tokenizer = load_model(args)
-    #share the model and tokenizer with the child processes
-    model.share_memory()
-    # print(model)
-    # print(tokenizer)
+    main_pid = os.getpid()
+    print(f"main process id: {main_pid}, core affinity set to {os.sched_getaffinity(main_pid)}")
+    # load one copy of the model for each numa node
+    # determine how many instances to run on each numa node
+    instances_per_node = args.num_instances // args.model_copies
+    # Find how many cores for each numa node
+    cores_per_node = len(args.cpu_id_list) // args.model_copies
+    # create a list to store the models
+    models_tokenizers = []
+    for i in range(args.model_copies):
+        cpu_ids = args.cpu_id_list[i*cores_per_node:(i+1)*cores_per_node]
+        os.sched_setaffinity(main_pid, cpu_ids)
+        model, tokenizer = load_model(args)
+        model.share_memory()
+        models_tokenizers.append({"model": model, "tokenizer": tokenizer})
+
+    print(f"main process id: {main_pid}, core affinity set to {os.sched_getaffinity(main_pid)}")
     # create input and output queues
     input_queue = JoinableQueue()
     output_queue = JoinableQueue()
@@ -186,8 +199,11 @@ def main(args):
     # create the processes
     processes = []
     for i in range(args.num_instances):
+        node_idx = i // instances_per_node
         cpu_ids = args.cpu_id_list[i*args.cores_per_instance:(i+1)*args.cores_per_instance]
-        p = Process(target=generate_output, args=(model, tokenizer, input_queue, output_queue, cpu_ids, args, lock, instance_ready_counter))
+        p = Process(target=generate_output, 
+                    args=(models_tokenizers[node_idx]["model"], models_tokenizers[node_idx]["tokenizer"], 
+                          input_queue, output_queue, cpu_ids, args, lock, instance_ready_counter))
         p.start()
         processes.append(p)
 
