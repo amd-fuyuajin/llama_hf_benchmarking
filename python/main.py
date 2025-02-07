@@ -170,9 +170,7 @@ def load_model(args):
 # this function will load the model and tokenizer. It will start multiple processes to run the inference
 # each process will read the prompts from a input queue and write the outputs to a output queue
 def main(args):
-    # set multiprocessing start method to spawn
-    mp.set_start_method("spawn")
-    
+
     # create the input and output queues
     input_queue = JoinableQueue()
     output_queue = JoinableQueue()
@@ -273,6 +271,9 @@ def main(args):
 
 
 if __name__ == "__main__":
+    # set multiprocessing start method to spawn
+    mp.set_start_method("spawn")
+    
     args = parse_cmd()
     test_output_length = args.output_length
     # set output_lenght to 1 to measure the TTFT
