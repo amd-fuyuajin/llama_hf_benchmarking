@@ -56,12 +56,14 @@ def parse_cmd():
 
 # create a function to generate the output. This function will be called by multiprocessing.Process
 # this function will read the prompts from a input queue and write the outputs to an output queue
-def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args, lock, instance_ready_counter):
+def generate_output(input_queue, output_queue, cpu_ids, args, lock, instance_ready_counter):
     # get pid of the process
     pid = os.getpid()
     os.sched_setaffinity(pid, cpu_ids)
     torch.set_num_threads(len(cpu_ids))
     print(f"starting process {pid}")
+    # load the model and tokenizer
+    model, tokenizer = load_model(args)
     # load all the prompts into memory.
     # get the input_lenght from the args
     prompts_dict = {}
@@ -168,14 +170,10 @@ def load_model(args):
 # this function will load the model and tokenizer. It will start multiple processes to run the inference
 # each process will read the prompts from a input queue and write the outputs to a output queue
 def main(args):
-    torch.set_num_threads(1)
-    # load the model and tokenizer
-    model, tokenizer = load_model(args)
-    #share the model and tokenizer with the child processes
-    model.share_memory()
-    # print(model)
-    # print(tokenizer)
-    # create input and output queues
+    # set multiprocessing start method to spawn
+    mp.set_start_method("spawn")
+    
+    # create the input and output queues
     input_queue = JoinableQueue()
     output_queue = JoinableQueue()
 
@@ -187,7 +185,7 @@ def main(args):
     processes = []
     for i in range(args.num_instances):
         cpu_ids = args.cpu_id_list[i*args.cores_per_instance:(i+1)*args.cores_per_instance]
-        p = Process(target=generate_output, args=(model, tokenizer, input_queue, output_queue, cpu_ids, args, lock, instance_ready_counter))
+        p = Process(target=generate_output, args=(input_queue, output_queue, cpu_ids, args, lock, instance_ready_counter))
         p.start()
         processes.append(p)
 
