@@ -187,7 +187,7 @@ def main(args):
     processes = []
     for i in range(args.num_instances):
         cpu_ids = args.cpu_id_list[i*args.cores_per_instance:(i+1)*args.cores_per_instance]
-        p = Process(target=generate_output, args=(model, tokenizer, input_queue, output_queue, cpu_ids, args))
+        p = Process(target=generate_output, args=(model, tokenizer, input_queue, output_queue, cpu_ids, args, lock, instance_ready_counter))
         p.start()
         processes.append(p)
 
