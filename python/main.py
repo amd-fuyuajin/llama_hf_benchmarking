@@ -62,6 +62,7 @@ def generate_output(input_queue, output_queue, cpu_ids, args, lock, instance_rea
     pid = os.getpid()
     os.sched_setaffinity(pid, cpu_ids)
     torch.set_num_threads(len(cpu_ids))
+    os.environ["OMP_NUM_THREADS"] = str(len(cpu_ids))
     print(f"starting process {pid}")
     # load the model and tokenizer
     model, tokenizer = load_model(args)
