@@ -103,39 +103,38 @@ def generate_output(input_queue, output_queue, cpu_ids, args, lock, instance_rea
         # get the prompt from the prompts_dict
         prompt_batch = [prompts_dict[prompt_id] for prompt_id in prompt_ids]
         # print(f"prompt_batch: {prompt_batch}")
-        t0 = time()        
-        # encode the prompt
-        inputs = tokenizer(prompt_batch, return_tensors="pt", padding=True, truncation=True)
-        inputs = {key: value.to(args.device) for key, value in inputs.items()}
-        # print(f"inputs: {inputs}")
-        # generate the output
-        t1 = time()
-        with torch.no_grad():
-            if args.compile_backend == "vllm":
-                outputs_tokens = model.generate(
-                    prompt_batch,
-                    sampling_params
-                )
-            else:
+        if args.compile_backend == "vllm":
+            t0 = time()
+            t1 = time()
+            outputs_tokens = model.generate(prompt_batch, sampling_params)
+            t2 = time()
+            outputs = [output.outputs[0].text for output in outputs_tokens]
+            t3 = time()
+        else:
+            t0 = time()        
+            # encode the prompt
+            inputs = tokenizer(prompt_batch, return_tensors="pt", padding=True, truncation=True)
+            inputs = {key: value.to(args.device) for key, value in inputs.items()}
+            # print(f"inputs: {inputs}")
+            # generate the output
+            t1 = time()
+            with torch.no_grad():
                 outputs_tokens = model.generate(
                     **inputs, 
                     min_new_tokens=output_length, 
                     max_new_tokens=output_length, 
                     use_cache=True,
                     do_sample=False)
-        t2 = time()
-        # put the output in the output queue
-        if args.compile_backend == "vllm":
-            outputs =[output.outputs[0].text for output in outputs_tokens]
-        else:
+            t2 = time()
             outputs = tokenizer.batch_decode(outputs_tokens, skip_special_tokens=True)
-        t3 = time()
+            t3 = time()
         # print(f"PID={pid}, outputs: {outputs}")
         # if the args.return_text is not set, then do not return the generated text
         # set outputs to a list of empty strings
         if not args.return_text:
             outputs = [""] * len(outputs)
-
+        
+        # put the output in the output queue
         output_queue.put({
             "prompt_ids": prompt_ids, 
             "outputs": outputs, 
