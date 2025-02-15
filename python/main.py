@@ -11,6 +11,7 @@ from torch.multiprocessing import Process, Queue, JoinableQueue, Value, Lock
 from time import time, sleep
 import pandas as pd
 import numpy as np
+from vllm import LLM, SamplingParams
 
 def parse_cmd():
     parser = argparse.ArgumentParser(description="Benchmark Llama2-70b model on CPU")
@@ -64,6 +65,12 @@ def generate_output(input_queue, output_queue, cpu_ids, args, lock, instance_rea
     print(f"starting process {pid}")
     # load the model and tokenizer
     model, tokenizer = load_model(args)
+    if args.compile_backend == "vllm":
+        sampling_params = SamplingParams(
+            temperature=0, 
+            top_p=1.0, 
+            max_tokens=args.output_length,
+        )
     # load all the prompts into memory.
     # get the input_lenght from the args
     prompts_dict = {}
@@ -104,15 +111,24 @@ def generate_output(input_queue, output_queue, cpu_ids, args, lock, instance_rea
         # generate the output
         t1 = time()
         with torch.no_grad():
-            outputs_tokens = model.generate(
-                **inputs, 
-                min_new_tokens=output_length, 
-                max_new_tokens=output_length, 
-                use_cache=True,
-                do_sample=False)
+            if args.compile_backend == "vllm":
+                outputs_tokens = model.generate(
+                    prompt_batch,
+                    sampling_params
+                )
+            else:
+                outputs_tokens = model.generate(
+                    **inputs, 
+                    min_new_tokens=output_length, 
+                    max_new_tokens=output_length, 
+                    use_cache=True,
+                    do_sample=False)
         t2 = time()
         # put the output in the output queue
-        outputs = tokenizer.batch_decode(outputs_tokens, skip_special_tokens=True)
+        if args.compile_backend == "vllm":
+            outputs =[output.outputs[0].text for output in outputs_tokens]
+        else:
+            outputs = tokenizer.batch_decode(outputs_tokens, skip_special_tokens=True)
         t3 = time()
         # print(f"PID={pid}, outputs: {outputs}")
         # if the args.return_text is not set, then do not return the generated text
@@ -133,24 +149,39 @@ def generate_output(input_queue, output_queue, cpu_ids, args, lock, instance_rea
 
 # create a function to load the model and tokenizer
 def load_model(args):
-    # load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    tokenizer.pad_token = tokenizer.eos_token
-    # load the model
-    model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
-    model.eval().to(args.device)
     compile_backend = args.compile_backend
     if compile_backend == "zentorch":
         import zentorch
+        # load the tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        # load the model
+        model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
+        model.eval().to(args.device)
+
         model = zentorch.llm.optimize(model, dtype=torch.bfloat16)
         model = torch.compile(model, backend="zentorch")
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "ipex":
         import intel_extension_for_pytorch as ipex
+        # load the tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        # load the model
+        model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
+        model.eval().to(args.device)
+
         model = ipex.optimize(model, dtype=torch.bfloat16)
         model = torch.compile(model, backend="ipex")
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "torchinductor":
+        # load the tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        # load the model
+        model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
+        model.eval().to(args.device)
+
         model = torch.compile(model)
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "ipex_llm":
@@ -163,6 +194,16 @@ def load_model(args):
                                                  use_cache=True)
         print(f"compiled with backend: {compile_backend}")
         model.eval().to(args.device)
+    elif compile_backend == "vllm":
+        model = LLM(
+            model=args.model_name,
+            max_num_seqs=args.batch_size,
+            max_model_len=None,
+            trust_remote_code=True,
+            enforce_eager=True,
+            device=args.device,
+        )
+        tokenizer = None
     
     return model, tokenizer
 
