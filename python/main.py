@@ -133,29 +133,46 @@ def generate_output(input_queue, output_queue, cpu_ids, args, lock, instance_rea
 
 # create a function to load the model and tokenizer
 def load_model(args):
-    # load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    tokenizer.pad_token = tokenizer.eos_token
-    # load the model
-    model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
-    model.eval().to(args.device)
     compile_backend = args.compile_backend
     if compile_backend == "zentorch":
         import zentorch
+        # load the tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        # load the model
+        model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
+        model.eval().to(args.device)
+
         model = zentorch.llm.optimize(model, dtype=torch.bfloat16)
         model = torch.compile(model, backend="zentorch")
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "ipex":
         import intel_extension_for_pytorch as ipex
+        # load the tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        # load the model
+        model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
+        model.eval().to(args.device)
+
         model = ipex.optimize(model, dtype=torch.bfloat16)
         model = torch.compile(model, backend="ipex")
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "torchinductor":
-        model = torch.compile(model)
+        # load the tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        # load the model
+        model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
+        model.eval().to(args.device)
+
+        model = torch.compile(model, backend="inductor")
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "ipex_llm":
         import ipex_llm.transformers as ipex_transformers
-        model = ipex_transformers.AutoModelForCausalLM.from_pretrained(model_path,
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        model = ipex_transformers.AutoModelForCausalLM.from_pretrained(args.model_name,
                                                  #load_in_4bit=True,
                                                  torch_dtype=torch.bfloat16,
                                                  optimize_model=True,
