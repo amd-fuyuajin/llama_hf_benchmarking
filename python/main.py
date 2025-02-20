@@ -182,11 +182,13 @@ def load_model(args):
         model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
         model.eval().to(args.device)
 
-        model = torch.compile(model)
+        model = torch.compile(model, backend="inductor")
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "ipex_llm":
         import ipex_llm.transformers as ipex_transformers
-        model = ipex_transformers.AutoModelForCausalLM.from_pretrained(model_path,
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        model = ipex_transformers.AutoModelForCausalLM.from_pretrained(args.model_name,
                                                  #load_in_4bit=True,
                                                  torch_dtype=torch.bfloat16,
                                                  optimize_model=True,
