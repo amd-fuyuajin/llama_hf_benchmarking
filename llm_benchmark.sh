@@ -83,7 +83,7 @@ fi
 ./platform_info.sh $OUTPUT_DIR
 
 if $uprof; then
-#    $POWER_PROF -o "$RESULTS_DIR" \
+    $POWER_PROF -o "$OUTPUT_DIR" \
     $UPROFPCM -o "${OUTPUT_DIR}/${folder_name}.csv" -- \
         $PYTHON -u "${MAIN_DIR}/python/main.py" --model_name "$model_name" \
         --input_length "$input_length" --output_length "$output_length" \
