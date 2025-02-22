@@ -27,7 +27,7 @@ def extract_runtime_info(results_root_dir):
         # replace the OUT1.txt with f"OUT{output_len}.txt" in the file path
         result_file = re.sub(r"OUT1.txt", f"OUT{entry['output_length']}.txt", file_path.name)
         result_file_path = file_path.parent / result_file
-        if not os.exists(result_file_path):
+        if not os.path.exists(result_file_path):
             print(f"Result file {result_file_path} does not exist. Skipping this file.")
             continue
         # extract throughput and other information from result_file_path

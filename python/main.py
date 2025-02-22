@@ -104,6 +104,7 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args, 
         # generate the output
         t1 = time()
         with torch.no_grad():
+        #with torch.inference_mode(), torch.cpu.amp.autocast(enabled=True):
             outputs_tokens = model.generate(
                 **inputs, 
                 min_new_tokens=output_length, 
@@ -155,8 +156,9 @@ def load_model(args):
         model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
         model.eval().to(args.device)
 
-        model = ipex.optimize(model, dtype=torch.bfloat16)
-        model = torch.compile(model, backend="ipex")
+        model = model.to(memory_format=torch.channels_last)
+        model = ipex.llm.optimize(model, dtype=torch.bfloat16)
+        #model = torch.compile(model, backend="ipex")
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "torchinductor":
         # load the tokenizer
@@ -201,7 +203,7 @@ def main(args):
         cpu_ids = args.cpu_id_list[i*cores_per_node:(i+1)*cores_per_node]
         os.sched_setaffinity(main_pid, cpu_ids)
         model, tokenizer = load_model(args)
-        model.share_memory()
+        #model.share_memory()
         models_tokenizers.append({"model": model, "tokenizer": tokenizer})
 
     print(f"main process id: {main_pid}, core affinity set to {os.sched_getaffinity(main_pid)}")
