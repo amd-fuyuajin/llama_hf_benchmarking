@@ -78,7 +78,7 @@ def extract_runtime_info(results_root_dir):
         
         # calculate time per output token (TPOT) for the generation stage
         # use miniseconds as the unit
-        entry["TPOT"] = 1000 / entry["throughput_instance_generation"]
+        entry["TPOT"] = 1000 / (entry["throughput_instance_generation"] / entry["batch_size"])
         entry["concurrent_prompts"] = entry["num_instances"] * entry["batch_size"]
 
         results.append(entry)
