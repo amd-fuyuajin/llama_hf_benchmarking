@@ -176,7 +176,8 @@ def load_model(args):
         tokenizer.pad_token = tokenizer.eos_token
         model = ipex_transformers.AutoModelForCausalLM.from_pretrained(args.model_name,
                                                  #load_in_4bit=True,
-                                                 torch_dtype=torch.bfloat16,
+                                                 load_in_low_bit="bf16",
+                                                 #torch_dtype=torch.bfloat16,
                                                  optimize_model=True,
                                                  trust_remote_code=True,
                                                  use_cache=True)
