@@ -11,7 +11,6 @@ from torch.multiprocessing import Process, Queue, JoinableQueue, Value, Lock
 from time import time, sleep
 import pandas as pd
 import numpy as np
-from vllm import LLM, SamplingParams
 
 def parse_cmd():
     parser = argparse.ArgumentParser(description="Benchmark Llama2-70b model on CPU")
@@ -196,16 +195,13 @@ def load_model(args):
                                                  use_cache=True)
         print(f"compiled with backend: {compile_backend}")
         model.eval().to(args.device)
-    elif compile_backend == "vllm":
-        model = LLM(
-            model=args.model_name,
-            max_num_seqs=args.batch_size,
-            max_model_len=None,
-            trust_remote_code=True,
-            enforce_eager=True,
-            device=args.device,
-        )
-        tokenizer = None
+    elif compile_backend == "openvino":
+        from optimum.intel.openvino import OVModelForCausalLM
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer.pad_token = tokenizer.eos_token
+        model = OVModelForCausalLM.from_pretrained(args.model_name)
+        print(f"Using {compile_backend}")
+        model.eval().to(args.device)
     
     return model, tokenizer
 
