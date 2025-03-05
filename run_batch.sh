@@ -98,10 +98,12 @@ source env_setup.sh
 
 
 cpu_count=$(nproc)
+model_name="meta-llama/Llama-3.1-8B-Instruct"
 test_name="zentorch_test_new_script"
 compile_backend="zentorch"
+model_copies=2
 
-for num_instances in 12; do
+for num_instances in 2 4 6 12; do
     cores_per_instance=$((cpu_count/num_instances))
     total_batches=$((num_instances*2))
     for batch_size in 1 2 4 8 16 32 64 128 256; do
@@ -112,10 +114,11 @@ for num_instances in 12; do
             for output_length in 128 1024; do
                 folder_name="P${num_instances}_BS${batch_size}_IN${input_length}_OUT${output_length}"
                 ./llm_benchmark.sh --test-name $test_name --folder-name $folder_name --batch_size $batch_size \
+                --model_name $model_name --model_copies $model_copies \
                 --input_length $input_length --output_length $output_length \
                 --num_instances $num_instances --cores_per_instance $cores_per_instance \
                 --total_batches $total_batches --compile_backend $compile_backend \
-		--uprof
+		        #--uprof
 
             done
         done
