@@ -63,7 +63,7 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args, 
     pid = os.getpid()
     os.sched_setaffinity(pid, cpu_ids)
     torch.set_num_threads(len(cpu_ids))
-    print(f"starting process {pid}")
+    print(f"starting process {pid} on cpu: {cpu_ids}")
     # load all the prompts into memory.
     # get the input_lenght from the args
     prompts_dict = {}
@@ -77,8 +77,22 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args, 
         for line in lines:
             prompt = json.loads(line)
             prompts_dict[prompt["id"]] = prompt["text"]
-    print(f"data loaded in processed {pid}")
+    print(f"data loaded in process {pid}")
+    print(f"starting warm up in process {pid}")
+    for i in range(3):
+        warmup_prompts = [prompts_dict[k] for k in range(batch_size)]
+        # encode the prompt
+        inputs = tokenizer(warmup_prompts, return_tensors="pt", padding=True, truncation=True)
+        inputs = {key: value.to(args.device) for key, value in inputs.items()}
+        with torch.no_grad():
+            model.generate(
+                **inputs,
+                min_new_tokens=output_length,
+                max_new_tokens=output_length,
+                use_cache=True,
+                do_sample=False)
 
+    print(f"complete warm up in process {pid}")
     # increment the instance_ready_counter
     lock.acquire()
     instance_ready_counter.value += 1
@@ -296,6 +310,8 @@ def main(args):
     f_out.close()
 
     perf_df = pd.DataFrame(performance_metrics)
+    perf_df.to_csv(os.path.join(args.output_dir, f"perf_dataframe_BS{batch_size}_IN{input_length}_OUT{output_legth}.csv"))
+    print(perf_df)
     print(perf_df.describe())
 
     # write the arguments and performance metrics to a file
