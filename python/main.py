@@ -241,7 +241,7 @@ def main(args):
     print("start sending input")
 
     # add a few warmup iterations to the input queue
-    warmup_batches = args.num_instances * args.warup_iteration
+    warmup_batches = args.num_instances * args.warmup_iteration
     for b in range(warmup_batches):
         # create a batch of prompts
         prompt_ids = list(range(batch_size))
