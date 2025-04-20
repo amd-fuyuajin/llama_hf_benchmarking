@@ -23,6 +23,7 @@ def parse_cmd():
     parser.add_argument("--num_instances", type=int, default=1, help="Number of instances to run")
     parser.add_argument("--cores_per_instance", type=int, default=os.cpu_count(), help="Number of cores per instance")
     parser.add_argument("--total_batches", type=int, default=10, help="Total number of batches to run")
+    parser.add_argument("--warmup_iteration", type=int, default=3, help="Number of warmup iterations")
     parser.add_argument("--output_dir", type=str, default="output", help="Output directory")
     parser.add_argument("--compile_backend", type=str, help="Backend to compile the model (e.g. ipex, zentorch)")
     # add an argument to specify whether to return the generated text
@@ -78,21 +79,6 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args, 
             prompt = json.loads(line)
             prompts_dict[prompt["id"]] = prompt["text"]
     print(f"data loaded in process {pid}")
-    print(f"starting warm up in process {pid}")
-    for i in range(3):
-        warmup_prompts = [prompts_dict[k] for k in range(batch_size)]
-        # encode the prompt
-        inputs = tokenizer(warmup_prompts, return_tensors="pt", padding=True, truncation=True)
-        inputs = {key: value.to(args.device) for key, value in inputs.items()}
-        with torch.no_grad():
-            model.generate(
-                **inputs,
-                min_new_tokens=output_length,
-                max_new_tokens=output_length,
-                use_cache=True,
-                do_sample=False)
-
-    print(f"complete warm up in process {pid}")
     # increment the instance_ready_counter
     lock.acquire()
     instance_ready_counter.value += 1
@@ -138,6 +124,8 @@ def generate_output(model, tokenizer, input_queue, output_queue, cpu_ids, args, 
         output_queue.put({
             "prompt_ids": prompt_ids, 
             "outputs": outputs, 
+            "request_time": t0,
+            "complete_time": t3,
             "time_to_encode": t1-t0,
             "time_to_generate": t2-t1,
             "time_to_decode": t3-t2,
@@ -251,6 +239,14 @@ def main(args):
 
     start = time()
     print("start sending input")
+
+    # add a few warmup iterations to the input queue
+    warmup_batches = args.num_instances * args.warup_iteration
+    for b in range(warmup_batches):
+        # create a batch of prompts
+        prompt_ids = list(range(batch_size))
+        input_queue.put(prompt_ids)
+
     # send the prompt ids to the input queue
     for batch_ids in range(0, total_prompts, batch_size):
         end_idex = min(batch_ids+batch_size, total_prompts)
@@ -288,6 +284,9 @@ def main(args):
                     "prompt_id": outputs["prompt_ids"][i],
                     "output": outputs["outputs"][i],
                 }) + "\n")
+            performance_metrics["prompt_ids"].append(outputs["prompt_ids"])
+            performance_metrics["request_time"].append(outputs["request_time"])
+            performance_metrics["complete_time"].append(outputs["complete_time"])
             performance_metrics["time_to_encode"].append(outputs["time_to_encode"])
             performance_metrics["time_to_generate"].append(outputs["time_to_generate"])
             performance_metrics["time_to_decode"].append(outputs["time_to_decode"])
@@ -302,25 +301,32 @@ def main(args):
         p.join()
 
     end = time()
-    total_runtime = end - start
-    throughput_soc = total_prompts * args.output_length / total_runtime
-    request_per_second = total_prompts / total_runtime
-    print(f"Total time taken: {end-start:.4f} seconds")
-    print(f"SoC throughput: {request_per_second:.2f} samples/second, {throughput_soc:.2f} tokens/sec")
-    f_out.close()
 
     perf_df = pd.DataFrame(performance_metrics)
     perf_df.to_csv(os.path.join(args.output_dir, f"perf_dataframe_BS{batch_size}_IN{input_length}_OUT{output_legth}.csv"))
     print(perf_df)
     print(perf_df.describe())
 
+    test_only_df = perf_df.iloc[warmup_batches:]
+    total_runtime = end - start
+    test_runtime = test_only_df["complete_time"].max() - test_only_df["request_time"].min()
+    throughput_soc = total_prompts * args.output_length / test_runtime
+    request_per_second = total_prompts / test_runtime
+    print(f"Total time taken: {end-start:.4f} seconds")
+    print(f"Total test time taken: {test_runtime:.4f} seconds")
+    print(f"SoC throughput: {request_per_second:.2f} samples/second, {throughput_soc:.2f} tokens/sec")
+    f_out.close()
+
+
+
     # write the arguments and performance metrics to a file
     performance_file = os.path.join(args.output_dir, f"performance_metrics_BS{batch_size}_IN{input_length}_OUT{output_legth}.txt")
     with open(performance_file, "w") as f:
         f.write(json.dumps(vars(args)) + "\n")
-        f.write(perf_df.describe().to_json() + "\n")
+        f.write(test_only_df.describe().to_json() + "\n")
         f.write(json.dumps({
             "total_runtime": total_runtime,
+            "test_runtime": test_runtime,
             "throughput_soc": throughput_soc,
             "request_per_second": request_per_second
             }) + "\n")
