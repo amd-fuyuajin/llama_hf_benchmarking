@@ -23,7 +23,7 @@ def parse_cmd():
     parser.add_argument("--num_instances", type=int, default=1, help="Number of instances to run")
     parser.add_argument("--cores_per_instance", type=int, default=os.cpu_count(), help="Number of cores per instance")
     parser.add_argument("--total_batches", type=int, default=10, help="Total number of batches to run")
-    parser.add_argument("--warmup_iteration", type=int, default=3, help="Number of warmup iterations")
+    parser.add_argument("--warmup_iteration", type=int, default=0, help="Number of warmup iterations")
     parser.add_argument("--output_dir", type=str, default="output", help="Output directory")
     parser.add_argument("--compile_backend", type=str, help="Backend to compile the model (e.g. ipex, zentorch)")
     # add an argument to specify whether to return the generated text
@@ -246,13 +246,23 @@ def main(args):
         # create a batch of prompts
         prompt_ids = list(range(batch_size))
         input_queue.put(prompt_ids)
+    # wait until all the warmup runs are done and then send the testing batches so that they start at the same time
+    # monitor the size the output queue. When the size is equal to warmup batches, warmup runs are finished
+    while output_queue.qsize() < warmup_batches:
+        print("running warmup batches")
+        sleep(2)
+    sleep(2)
+    print("start testing batches")
 
     # send the prompt ids to the input queue
     for batch_ids in range(0, total_prompts, batch_size):
         end_idex = min(batch_ids+batch_size, total_prompts)
         prompt_ids = list(range(batch_ids, end_idex))
         input_queue.put(prompt_ids)
-    
+#     # wait for testing to complete
+#     while output_queue.qsize() < warmup_batches + args.total_batches:
+#         sleep(2)
+
     # send None to the input queue to signal the end of the prompts
     for _ in range(args.num_instances):
         input_queue.put(None)
