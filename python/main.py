@@ -23,7 +23,7 @@ def parse_cmd():
     parser.add_argument("--num_instances", type=int, default=1, help="Number of instances to run")
     parser.add_argument("--cores_per_instance", type=int, default=os.cpu_count(), help="Number of cores per instance")
     parser.add_argument("--total_batches", type=int, default=10, help="Total number of batches to run")
-    parser.add_argument("--warmup_iteration", type=int, default=0, help="Number of warmup iterations")
+    parser.add_argument("--warmup_iteration", type=int, default=1, help="Number of warmup iterations")
     parser.add_argument("--output_dir", type=str, default="output", help="Output directory")
     parser.add_argument("--compile_backend", type=str, help="Backend to compile the model (e.g. ipex, zentorch)")
     # add an argument to specify whether to return the generated text
