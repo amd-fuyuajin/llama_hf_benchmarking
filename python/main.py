@@ -140,7 +140,7 @@ def load_model(args):
     if compile_backend == "zentorch":
         import zentorch
         # load the tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name, padding_side="left")
         tokenizer.pad_token = tokenizer.eos_token
         # load the model
         model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
@@ -152,7 +152,7 @@ def load_model(args):
     elif compile_backend == "ipex":
         import intel_extension_for_pytorch as ipex
         # load the tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name, padding_side="left")
         tokenizer.pad_token = tokenizer.eos_token
         # load the model
         model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
@@ -164,7 +164,7 @@ def load_model(args):
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "torchinductor":
         # load the tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name, padding_side="left")
         tokenizer.pad_token = tokenizer.eos_token
         # load the model
         model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.bfloat16)
@@ -174,7 +174,7 @@ def load_model(args):
         print(f"compiled with backend: {compile_backend}")
     elif compile_backend == "ipex_llm":
         import ipex_llm.transformers as ipex_transformers
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name, padding_side="left")
         tokenizer.pad_token = tokenizer.eos_token
         model = ipex_transformers.AutoModelForCausalLM.from_pretrained(args.model_name,
                                                  #load_in_4bit=True,
@@ -200,6 +200,15 @@ def main(args):
     instances_per_node = args.num_instances // args.model_copies
     # Find how many cores for each numa node
     cores_per_node = len(args.cpu_id_list) // args.model_copies
+
+    # get number of samples in the prompts files
+    input_dir = os.getenv("INPUT_DIR")
+    input_file = os.path.join(input_dir, f"prompts_{args.input_length}.txt")
+    with open(input_file, "r") as f:
+        lines = f.readlines()
+        TOTAL_PROMPTS = len(lines)
+
+
     # create a list to store the models
     models_tokenizers = []
     for i in range(args.model_copies):
@@ -245,6 +254,9 @@ def main(args):
     for b in range(warmup_batches):
         # create a batch of prompts
         prompt_ids = list(range(batch_size))
+        # sampling prompts randomly
+        # comment the following line to send prompts in the order presented in the prompt file
+        prompt_ids = [np.random.randint(TOTAL_PROMPTS) for _ in prompt_ids]
         input_queue.put(prompt_ids)
     # wait until all the warmup runs are done and then send the testing batches so that they start at the same time
     # monitor the size the output queue. When the size is equal to warmup batches, warmup runs are finished
@@ -258,6 +270,9 @@ def main(args):
     for batch_ids in range(0, total_prompts, batch_size):
         end_idex = min(batch_ids+batch_size, total_prompts)
         prompt_ids = list(range(batch_ids, end_idex))
+        # sampling prompts randomly
+        # comment the following line to send prompts in the order presented in the prompt file
+        prompt_ids = [np.random.randint(TOTAL_PROMPTS) for _ in prompt_ids]
         input_queue.put(prompt_ids)
 #     # wait for testing to complete
 #     while output_queue.qsize() < warmup_batches + args.total_batches:

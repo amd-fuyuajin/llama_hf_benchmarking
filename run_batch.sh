@@ -108,16 +108,16 @@ test_name="05232025-llama3.1-70B-zentorch5.0.2"
 compile_backend="zentorch"
 model_copies=2
 
-for rep in 1 2 3; do
-for num_instances in 4 12 24; do
+for rep in 5 6 7; do
+for num_instances in 12; do
     cores_per_instance=$((cpu_count/num_instances))
     total_batches=$((num_instances*1))
-    for batch_size in 1 2 4 8 16 32; do
+    for batch_size in 32; do
 	if (( num_instances * batch_size > 1536 )); then
             continue
 	fi
-        for input_length in 128 1024; do
-            for output_length in 128 1024; do
+        for input_length in 1024; do
+            for output_length in 128; do
                 folder_name="P${num_instances}_BS${batch_size}_IN${input_length}_OUT${output_length}_REP${rep}"
                 ./llm_benchmark.sh --test-name $test_name --folder-name $folder_name --batch_size $batch_size \
                 --model_name $model_name --model_copies $model_copies \

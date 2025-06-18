@@ -51,7 +51,7 @@ def prepare_data(data_dir, model_name, output_dir, prompt_lengths, num_prompts):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare prompts for benchmarking")
     parser.add_argument("--data_dir", type=str, default="data", help="Directory containing the dataset")
-    parser.add_argument("--model_name", type=str, default="meta-llama/Llama-2-7b-chat-hf", help="Model name or path")
+    parser.add_argument("--model_name", type=str, default="meta-llama/Llama-3.1-70B-Instruct", help="Model name or path")
     parser.add_argument("--output_dir", type=str, default="prompts", help="Output directory")
     parser.add_argument("--prompt_lengths", type=int, nargs="+", default=[8, 16, 32, 64, 128, 256, 512, 1024, 2048], help="Lengths of the prompts")
     parser.add_argument("--num_prompts", type=int, default=10, help="Number of prompts to generate for each length")
