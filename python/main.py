@@ -11,6 +11,12 @@ from torch.multiprocessing import Process, Queue, JoinableQueue, Value, Lock
 from time import time, sleep
 import pandas as pd
 import numpy as np
+import warnings
+# ignore warnings
+warnings.filterwarnings("ignore")
+
+from transformers import logging
+logging.set_verbosity_error()
 
 def parse_cmd():
     parser = argparse.ArgumentParser(description="Benchmark Llama2-70b model on CPU")
