@@ -112,7 +112,7 @@ for rep in 1 2 3; do
 for num_instances in 4 8 16; do
     cores_per_instance=$((cpu_count/num_instances))
     total_batches=$((num_instances*1))
-    for batch_size in 128; do
+    for batch_size in 1 2 4 8 16; do
 	if (( num_instances * batch_size > 2500 )); then
             continue
 	fi
