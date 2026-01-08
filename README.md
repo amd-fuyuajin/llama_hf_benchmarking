@@ -203,7 +203,7 @@ The generated CSV includes the following performance metrics:
 | `cores_per_instance` | CPU cores allocated per instance |
 | `backend` | Compilation backend used |
 | `TTFT` | Time To First Token (**The unit is second**) |
-| `TPOT` | Time Per Output Token (**The unit is minisecond**) |
+| `TPOT` | Time Per Output Token (**The unit is millisecond**) |
 | `throughput_instance` | end-to-end throughput (Tokens/second) per instance |
 | `throughput_soc` | Aggregate end-to-end throughput (tokens/second) across all instances |
 | `throughput_instance_generation` | Generation-only throughput (Tokens/second) per instance |
